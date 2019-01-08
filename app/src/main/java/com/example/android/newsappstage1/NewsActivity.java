@@ -1,96 +1,79 @@
 package com.example.android.newsappstage1;
 
 import android.app.LoaderManager;
+import android.app.LoaderManager.LoaderCallbacks;
 import android.content.Context;
 import android.content.Intent;
 import android.content.Loader;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class NewsActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<List<News>>{
-
-    private static final int NEWS_LOADER_ID = 1;
-    private static final String GUARDIANS_REQUEST_URL = "http://content.guardianapis.com/search?section=games&show-tags=contributor&format=json&lang=en&order-by=newest&show-fields=thumbnail&page-size=50&api-key=fc7e9c59-0ea7-496f-ac5c-2296be591711";
-    private static final String GUARDIANS_GAMES_URL = "https://www.theguardian.com/games";
-    private NewsAdapter newsAdapter;
-    private ListView newsListView;
-    private TextView emptyStateTextView;
-    private View loadingIndicator;
+public class NewsActivity extends AppCompatActivity implements LoaderCallbacks<List<News>> {
+    private NewsAdapter mAdapter;
+    private TextView mNoContentTextView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.news_activity);
 
-        emptyStateTextView = findViewById(R.id.empty_view);
-        loadingIndicator = findViewById(R.id.loading_indicator);
-        newsListView = findViewById(R.id.list);
+        ListView newsListView = findViewById(R.id.list_item);
+        mNoContentTextView = findViewById(R.id.nocontent_text_view);
+        newsListView.setEmptyView(mNoContentTextView);
+        mAdapter = new NewsAdapter(this, new ArrayList<News>());
 
-        newsAdapter = new NewsAdapter(this, new ArrayList<News>());
-
-        newsListView.setAdapter(newsAdapter);
-
-        ConnectivityManager cm = (ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = null;
-        if (cm != null) {
-            networkInfo = cm.getActiveNetworkInfo();
-        }
-        if(networkInfo != null && networkInfo.isConnected()) {
-            LoaderManager loaderManager = getLoaderManager();
-            loaderManager.initLoader(NEWS_LOADER_ID, null, this);
-        }else{
-            loadingIndicator.setVisibility(View.GONE);
-            emptyStateTextView.setText(getString(R.string.no_internet_connection));
-            emptyStateTextView.setVisibility(View.VISIBLE);
-        }
-
+        newsListView.setAdapter(mAdapter);
         newsListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int position, long l) {
-                News currentNews = newsAdapter.getItem(position);
-                if (currentNews != null) {
-                    String webUrl = currentNews.getWebTitle();
-                    Intent webIntent = new Intent(Intent.ACTION_VIEW);
-                    if(webUrl != null){
-                        webIntent.setData(Uri.parse(webUrl));
-                    }else{
-                        webIntent.setData(Uri.parse(GUARDIANS_GAMES_URL));
-                    }
-                    startActivity(webIntent);
-                }
+                News currentNews = mAdapter.getItem(position);
+                Uri newsUri = Uri.parse(currentNews.getmUrl());
+                Intent websiteIntent = new Intent(Intent.ACTION_VIEW, newsUri);
+                startActivity(websiteIntent);
             }
         });
+        ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+
+        if (networkInfo != null && networkInfo.isConnectedOrConnecting()) {
+            LoaderManager loaderManager = getLoaderManager();
+            loaderManager.initLoader(0, null, this);
+        } else {
+            View loadingIndicator = findViewById(R.id.loading_indicator);
+            loadingIndicator.setVisibility(View.GONE);
+            mNoContentTextView.setText(R.string.no_internet_connection);
+        }
     }
 
     @Override
-    public Loader<List<News>> onCreateLoader(int i, Bundle bundle) {
-        return new NewsLoader(this, GUARDIANS_REQUEST_URL);
+    public Loader<List<News>> onCreateLoader(int id, Bundle args) {
+        return new NewsLoader(this);
     }
 
     @Override
     public void onLoadFinished(Loader<List<News>> loader, List<News> news) {
-
+        View loadingIndicator = findViewById(R.id.loading_indicator);
         loadingIndicator.setVisibility(View.GONE);
-        emptyStateTextView.setText(getString(R.string.no_news_found));
-        newsListView.setEmptyView(emptyStateTextView);
-        newsAdapter.clear();
-        if(news != null && !news.isEmpty()){
-            newsAdapter.addAll(news);
-        }
+        mNoContentTextView.setText(R.string.no_news_found);
+        mAdapter.clear();
 
+        if (news != null && !news.isEmpty()) {
+            mAdapter.addAll(news);
+        }
     }
 
     @Override
     public void onLoaderReset(Loader<List<News>> loader) {
-        newsAdapter.clear();
+        mAdapter.clear();
     }
 }
